@@ -1,0 +1,3 @@
+observe_task:
+  description: "Observe the current state of the e-commerce analytics platform and report anything that looks abnormal."
+  expected_output: "A short observation report. No diagnosis is required at this stage."
