@@ -1,3 +1,11 @@
+"""Traffic emission and failure orchestration for the chaos generator.
+
+Normal traffic and injections share one transaction discipline: the engine is
+the layer that commits, so a failure and its ground-truth ledger row land
+together (and an injector's mutation never leaks out without its incident
+record).
+"""
+
 from __future__ import annotations
 
 import random
@@ -13,11 +21,20 @@ from src.seed.factories import EcommerceFactory
 
 
 class TrafficGenerator:
+    """Emits batches of plausible normal orders into source Postgres."""
+
     def __init__(self, conn: psycopg.Connection) -> None:
         self.conn = conn
         self.factory = EcommerceFactory(Faker())
 
     def emit(self, count: int) -> int:
+        """Insert ``count`` normal orders in one batch; return rows inserted.
+
+        Samples existing customers/products, builds each order through the
+        seed factory (so values stay realistic), resolves the customer column
+        drift-aware, then bulk-inserts and commits. Returns ``0`` without
+        writing if there are no customers or products to reference.
+        """
         customer_column = repo.order_customer_column(self.conn)
         customers = repo.sample_customer_ids(self.conn, min(count, 200))
         products = repo.sample_products(self.conn, min(count, 200))
@@ -53,11 +70,20 @@ class TrafficGenerator:
 
 
 def run_traffic(conn: psycopg.Connection, count: int) -> int:
+    """One-shot convenience wrapper around :meth:`TrafficGenerator.emit`."""
     inserted = TrafficGenerator(conn).emit(count)
     return inserted
 
 
 def inject(conn: psycopg.Connection, key: str) -> InjectionResult:
+    """Run failure ``key``, record it to the I4 ledger, and commit atomically.
+
+    The injector's mutation and its ``injected_incidents`` row commit in the
+    same transaction so ground truth can never diverge from what was injected
+    (note: ``multi_failure_cascade`` records its own sub-incidents first, so
+    that one key yields four ledger rows). Raises ``KeyError`` for an unknown
+    ``key``.
+    """
     from src.gen.failures import get
 
     result = get(key).inject(conn)
@@ -74,6 +100,15 @@ def watch(
     failures: list[str],
     on_event,
 ) -> None:
+    """Run the continuous traffic+chaos loop until interrupted.
+
+    Each tick emits a ``batch`` of normal orders; every ``failure_every`` ticks
+    it injects one random failure drawn from ``failures`` (or the whole
+    registry when empty). ``on_event`` is called with a human-readable line per
+    tick and per injection. ``failure_every`` of 0 disables injection. Loops
+    forever, sleeping ``interval`` seconds between ticks; the CLI stops it on
+    ``KeyboardInterrupt``.
+    """
     generator = TrafficGenerator(conn)
     pool = failures or list(REGISTRY)
     tick = 0

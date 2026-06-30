@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Converge — Compile Intent into Autonomous Systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:wght@400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400;1,6..72,500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --font-display: 'Instrument Serif', Georgia, serif;
+    --font-body: 'DM Sans', system-ui, sans-serif;
+    --font-editorial: 'Newsreader', 'Georgia', serif;
+    --font-mono: 'Fira Code', 'SF Mono', Consolas, monospace;
+    --bg: #08080a; --surface: #111114; --surface2: #19191e;
+    --border: rgba(120,160,220,0.08); --border-bright: rgba(120,160,220,0.18);
+    --text: #eaedf2; --text-dim: #6e7a8c;
+    --accent: #4a9eff; --accent-dim: rgba(74,158,255,0.10);
+    --silver: #b0bec5; --silver-bright: #cfd8dc; --silver-dim: rgba(176,190,197,0.10);
+    --gold: #d4af37; --gold-dim: rgba(212,175,55,0.10);
+    --green: #3fb950; --green-dim: rgba(63,185,80,0.10);
+    --red: #f85149; --purple: #a78bfa; --purple-dim: rgba(167,139,250,0.10);
+    --cyan: #22d3ee; --cyan-dim: rgba(34,211,238,0.10); --orange: #ef9000;
+    --code-bg: #060608; --code-text: #c8d0dc;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: var(--font-body); color: var(--text); background: var(--bg); overflow: hidden; }
+  body::after {
+    content: ''; position: fixed; inset: 0; z-index: 9999; pointer-events: none; opacity: 0.035;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+  }
+  .deck { height: 100dvh; overflow-y: auto; scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+  .slide {
+    height: 100dvh; scroll-snap-align: start; overflow: hidden; position: relative;
+    display: flex; flex-direction: column; justify-content: center;
+    padding: clamp(32px,5vh,56px) clamp(40px,5.5vw,96px); isolation: isolate;
+  }
+  .slide__display { font-family: var(--font-display); font-size: clamp(56px,10vw,120px); font-weight: 400; letter-spacing: -1px; line-height: 0.92; }
+  .slide__heading { font-family: var(--font-display); font-size: clamp(34px,5.6vw,66px); font-weight: 400; letter-spacing: -0.5px; line-height: 1.08; }
+  .slide__body { font-family: var(--font-editorial); font-size: clamp(18px,2vw,23px); font-weight: 400; line-height: 1.5; color: var(--text-dim); letter-spacing: 0.01em; }
+  .slide__label { font-family: var(--font-mono); font-size: clamp(11px,1.1vw,14px); font-weight: 600; text-transform: uppercase; letter-spacing: 2.5px; color: var(--accent); margin-bottom: 16px; position: relative; padding-left: 20px; }
+  .slide__label::before { content: ''; position: absolute; left: 0; top: 50%; width: 8px; height: 8px; transform: translateY(-50%) rotate(45deg); background: var(--accent); opacity: 0.7; box-shadow: 0 0 8px rgba(74,158,255,0.4); }
+  .act-marker { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 4px; text-transform: uppercase; margin-bottom: 8px; opacity: 0.7; position: relative; padding-left: 32px; }
+  .act-marker::before { content: ''; position: absolute; left: 0; top: 50%; width: 22px; height: 1px; background: linear-gradient(90deg, transparent, var(--text-dim)); }
+
+  .gradient-text { background: linear-gradient(135deg, var(--accent) 0%, var(--silver-bright) 50%, #fff 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 0 24px rgba(74,158,255,0.08)); }
+  .gradient-gold { background: linear-gradient(135deg, var(--gold) 0%, #fff 50%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; filter: drop-shadow(0 0 24px rgba(212,175,55,0.10)); }
+  .gradient-green { background: linear-gradient(135deg, var(--green) 0%, #fff 60%, var(--green) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+  .gradient-purple { background: linear-gradient(135deg, var(--purple) 0%, #fff 55%, var(--accent) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+  .slide--title { justify-content: center; align-items: center; text-align: center; background-image: radial-gradient(ellipse at 50% 30%, rgba(74,158,255,0.12) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(212,175,55,0.04) 0%, transparent 40%); }
+  .slide--silent { justify-content: center; align-items: center; text-align: center; }
+  .slide--quote { justify-content: center; align-items: center; text-align: center; background-image: radial-gradient(ellipse at 50% 50%, rgba(176,190,197,0.06) 0%, transparent 60%); }
+  .slide::before {
+    content: ''; position: absolute; inset: 0; pointer-events: none; z-index: -1;
+    background-image: radial-gradient(ellipse 55% 40% at 12% 8%, rgba(74,158,255,0.04) 0%, transparent 55%), radial-gradient(ellipse 45% 40% at 88% 92%, rgba(176,190,197,0.028) 0%, transparent 55%);
+  }
+  .slide--title::before, .slide--silent::before, .slide--quote::before { display: none; }
+
+  .hero-badge { display: inline-block; background: var(--accent); color: #000; font-family: var(--font-mono); font-size: 11px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; padding: 7px 18px; border-radius: 5px; box-shadow: 0 6px 22px rgba(74,158,255,0.4), 0 0 0 1px rgba(74,158,255,0.6), inset 0 1px 0 rgba(255,255,255,0.3); margin-bottom: 36px; }
+  .hero-badge--purple { background: var(--purple); box-shadow: 0 6px 22px rgba(167,139,250,0.4), 0 0 0 1px rgba(167,139,250,0.6), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .hero-badge--inline { font-size: 9px; letter-spacing: 2px; padding: 4px 11px; margin-bottom: 0; }
+  .hero-byline { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 40px; }
+  .hero-date { font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 2px; margin-top: 8px; opacity: 0.6; }
+  .hero-quote { font-family: var(--font-editorial); font-style: italic; font-size: clamp(28px,3.4vw,48px); line-height: 1.25; color: var(--text); max-width: 1300px; margin: 0 auto; letter-spacing: -0.01em; }
+  .hero-quote::before { content: '\201C'; color: var(--accent); margin-right: 4px; }
+  .hero-quote::after { content: '\201D'; color: var(--accent); margin-left: 4px; }
+  .hero-cite { font-family: var(--font-mono); font-size: 13px; color: var(--text-dim); letter-spacing: 2px; text-transform: uppercase; margin-top: 36px; }
+
+  /* ── PASS RAIL (the spine overview) ── */
+  .pass-rail { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0; border-top: 1px solid var(--border-bright); position: relative; margin-top: 8px; }
+  /* Rail flows through each pass's own colour, aligned to the 7 dots below it. */
+  .pass-rail::before {
+    content: ''; position: absolute; top: -2px; left: 0; right: 0; height: 3px; border-radius: 2px;
+    background: linear-gradient(90deg,
+      var(--gold) 7%, var(--accent) 21%, var(--accent) 36%,
+      var(--purple) 50%, var(--cyan) 64%, var(--accent) 79%, var(--green) 93%);
+    box-shadow: 0 0 14px rgba(74,158,255,0.22);
+  }
+  .pass-rail .pcol { padding: 20px 12px; border-right: 1px solid var(--border); position: relative; }
+  .pass-rail .pcol:last-child { border-right: none; }
+  /* Bigger, brighter dots with a double glow ring, each in its pass colour. */
+  .pass-rail .pcol::before {
+    content: ''; position: absolute; top: -9px; left: 12px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--c, var(--text-dim)); border: 2px solid var(--bg);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--c, var(--text-dim)) 22%, transparent), 0 0 14px var(--c, transparent);
+  }
+  .pass-rail .pn { font-family: var(--font-mono); font-size: 10px; color: var(--text-dim); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+  .pass-rail .pname { font-family: var(--font-display); font-size: 26px; color: var(--text); line-height: 1; margin-bottom: 8px; }
+  .pass-rail .pengine { font-family: var(--font-mono); font-size: 9.5px; color: var(--text-dim); letter-spacing: 0.5px; line-height: 1.3; }
+  .pass-rail .pgate { font-family: var(--font-mono); font-size: 9px; color: var(--green); letter-spacing: 0.5px; text-transform: uppercase; margin-top: 10px; line-height: 1.3; }
+
+  /* ── PHASE FLOW (per-pass 3-step) ── */
+  .phase-flow { display: flex; align-items: stretch; gap: 0; margin: 10px 0; width: 100%; }
+  .phase-flow__node { flex: 1; min-width: 0; position: relative; background: linear-gradient(180deg, rgba(74,158,255,0.08), rgba(74,158,255,0.01)); border: 1.5px solid var(--accent); border-radius: 14px; padding: 16px 14px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .phase-flow__node .pn-tag { font-family: var(--font-mono); font-size: 9.5px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  .phase-flow__node .pn-name { font-family: var(--font-display); font-size: clamp(20px,2.2vw,28px); color: var(--text); line-height: 1; margin-bottom: 8px; }
+  .phase-flow__node .pn-desc { font-family: var(--font-editorial); font-size: 13px; color: var(--text-dim); line-height: 1.4; }
+  .phase-flow__node.gold { background: linear-gradient(180deg, rgba(212,175,55,0.10), rgba(212,175,55,0.01)); border-color: var(--gold); } .phase-flow__node.gold .pn-tag { color: var(--gold); }
+  .phase-flow__node.purple { background: linear-gradient(180deg, rgba(167,139,250,0.10), rgba(167,139,250,0.01)); border-color: var(--purple); } .phase-flow__node.purple .pn-tag { color: var(--purple); }
+  .phase-flow__node.green { background: linear-gradient(180deg, rgba(63,185,80,0.10), rgba(63,185,80,0.01)); border-color: var(--green); } .phase-flow__node.green .pn-tag { color: var(--green); }
+  .phase-flow__node.cyan { background: linear-gradient(180deg, rgba(34,211,238,0.10), rgba(34,211,238,0.01)); border-color: var(--cyan); } .phase-flow__node.cyan .pn-tag { color: var(--cyan); }
+  .phase-flow__arrow { display: flex; align-items: center; justify-content: center; padding: 0 10px; color: var(--accent); opacity: 0.55; flex-shrink: 0; font-size: 22px; align-self: center; }
+
+  /* ── PASS META (engine / in / out chips) ── */
+  .pass-meta { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 22px; }
+  /* Premium filled badges — same look-and-feel as the cover hero-badge. */
+  .pass-meta .mchip {
+    font-family: var(--font-mono); font-size: 10.5px; font-weight: 800; letter-spacing: 1.5px;
+    text-transform: uppercase; padding: 7px 15px; border-radius: 6px;
+    color: #000; background: var(--silver-bright);
+    box-shadow: 0 6px 18px rgba(176,190,197,0.28), 0 0 0 1px rgba(176,190,197,0.5), inset 0 1px 0 rgba(255,255,255,0.35);
+  }
+  .pass-meta .mchip b { color: #000; font-weight: 800; }
+  .pass-meta .mchip.engine { background: var(--accent); box-shadow: 0 6px 18px rgba(74,158,255,0.4), 0 0 0 1px rgba(74,158,255,0.6), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .pass-meta .mchip.in     { background: var(--cyan);   box-shadow: 0 6px 18px rgba(34,211,238,0.4), 0 0 0 1px rgba(34,211,238,0.6), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .pass-meta .mchip.out    { background: var(--gold);   box-shadow: 0 6px 18px rgba(212,175,55,0.4), 0 0 0 1px rgba(212,175,55,0.6), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .pass-meta .mchip.sess   { background: var(--purple); box-shadow: 0 6px 18px rgba(167,139,250,0.4), 0 0 0 1px rgba(167,139,250,0.6), inset 0 1px 0 rgba(255,255,255,0.3); }
+  .pass-meta .mchip.gate   { background: var(--green);  box-shadow: 0 6px 18px rgba(63,185,80,0.4), 0 0 0 1px rgba(63,185,80,0.6), inset 0 1px 0 rgba(255,255,255,0.3); }
+
+  .gate-panel { border: 1px solid rgba(63,185,80,0.3); border-radius: 14px; padding: 20px 24px; background: linear-gradient(180deg, rgba(63,185,80,0.06), rgba(63,185,80,0.01)); position: relative; margin-top: 24px; max-width: 1400px; }
+  .gate-panel::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: var(--green); border-radius: 3px 0 0 3px; }
+  .gate-panel .gate-h { font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px; color: var(--green); text-transform: uppercase; margin-bottom: 6px; }
+  .gate-panel .gate-b { font-family: var(--font-editorial); font-size: 16px; color: var(--text); line-height: 1.45; }
+  .gate-panel .gate-b b { color: var(--green); font-style: normal; }
+  .artifact { font-family: var(--font-mono); font-size: 13px; color: var(--gold); letter-spacing: 0.5px; padding: 6px 14px; border: 1px solid rgba(212,175,55,0.3); border-radius: 8px; background: rgba(212,175,55,0.05); display: inline-block; }
+
+  /* ── VERSUS (the fork) ── */
+  .versus { display: grid; grid-template-columns: 1fr 56px 1fr; align-items: stretch; gap: 0; margin-top: 10px; }
+  .vs-side { border: 1px solid var(--border); border-radius: 16px; padding: 24px 26px; background: var(--surface); }
+  .vs-side.a { border-color: rgba(74,158,255,0.3); background: linear-gradient(180deg, rgba(74,158,255,0.05), rgba(74,158,255,0.01)); }
+  .vs-side.b { border-color: rgba(167,139,250,0.3); background: linear-gradient(180deg, rgba(167,139,250,0.05), rgba(167,139,250,0.01)); }
+  .vs-side .vs-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px; }
+  .vs-side.a .vs-tag { color: var(--accent); } .vs-side.b .vs-tag { color: var(--purple); }
+  .vs-side .vs-title { font-family: var(--font-display); font-size: 32px; color: var(--text); line-height: 1.05; margin-bottom: 16px; }
+  .vs-side ul { list-style: none; padding: 0; }
+  .vs-side li { font-family: var(--font-body); font-size: 15px; color: var(--text); padding: 6px 0 6px 22px; position: relative; line-height: 1.4; }
+  .vs-side li::before { content: '\25b8'; position: absolute; left: 0; }
+  .vs-side.a li::before { color: var(--accent); } .vs-side.b li::before { color: var(--purple); }
+  .vs-mid { display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 28px; color: var(--text-dim); }
+
+  /* ── invariant cards ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .fcard { background: linear-gradient(180deg, rgba(74,158,255,0.05), rgba(74,158,255,0.008)); border: 1px solid rgba(74,158,255,0.22); border-radius: 14px; padding: 22px; position: relative; overflow: hidden; }
+  .fcard::before { content: ''; position: absolute; top: 0; left: 10%; right: 10%; height: 2px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: 0.8; }
+  .fcard .ic { font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+  .fcard h3 { font-family: var(--font-display); font-size: 26px; color: var(--text); line-height: 1.05; margin-bottom: 8px; }
+  .fcard p { font-family: var(--font-editorial); font-size: 15px; color: var(--text-dim); line-height: 1.45; }
+  .fcard.gold { border-color: rgba(212,175,55,0.3); background: linear-gradient(180deg, rgba(212,175,55,0.06), rgba(212,175,55,0.01)); } .fcard.gold::before { background: linear-gradient(90deg, transparent, var(--gold), transparent); } .fcard.gold .ic { color: var(--gold); }
+  .fcard.green { border-color: rgba(63,185,80,0.3); background: linear-gradient(180deg, rgba(63,185,80,0.06), rgba(63,185,80,0.01)); } .fcard.green::before { background: linear-gradient(90deg, transparent, var(--green), transparent); } .fcard.green .ic { color: var(--green); }
+  .fcard.purple { border-color: rgba(167,139,250,0.3); background: linear-gradient(180deg, rgba(167,139,250,0.07), rgba(167,139,250,0.01)); } .fcard.purple::before { background: linear-gradient(90deg, transparent, var(--purple), transparent); } .fcard.purple .ic { color: var(--purple); }
+
+  .step-callout { margin-top: 24px; padding: 16px 22px; border-radius: 12px; border: 1px solid var(--border-bright); background: var(--surface); position: relative; max-width: 1400px; }
+  .step-callout::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 3px; background: var(--accent); border-radius: 3px 0 0 3px; }
+  .step-callout .so-what { font-family: var(--font-mono); font-size: 10px; letter-spacing: 2.5px; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  .step-callout .so-what-body { font-family: var(--font-editorial); font-size: 16px; color: var(--text); line-height: 1.45; }
+  .step-callout.purple::before { background: var(--purple); } .step-callout.purple .so-what { color: var(--purple); }
+
+  .deck-counter { position: fixed; bottom: 20px; right: 24px; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); z-index: 100; letter-spacing: 2px; padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px; background: rgba(8,8,10,0.75); }
+</style>
+</head>
+<body>
+<div class="deck">
+
+  <!-- S01 — COVER -->
+  <section class="slide slide--title">
+    <span class="hero-badge">CONVERGE · THE SPINE · AUTONOMOUS SYSTEMS</span>
+    <h1 class="slide__display gradient-text" style="font-size: clamp(64px,12vw,170px); letter-spacing:-2.5px; margin-bottom:24px;">Converge</h1>
+    <div class="slide__heading" style="color: var(--text); max-width:1300px; margin-bottom:28px;">
+      Compile intent into <span class="gradient-gold">autonomous systems</span> —<br/>
+      a fixed sequence of <span class="gradient-purple">seven passes</span>, each ending at a gate.
+    </div>
+    <p class="slide__body" style="max-width:980px;">
+      An AI-native engineer does not write the system. They lower a fuzzy requirement through a
+      repeatable descent until a machine can execute it without supervision.
+    </p>
+    <div class="hero-byline">The End-to-End Process</div>
+    <div class="hero-date">cvg-aut-systems-spine</div>
+  </section>
+
+  <!-- S02 — THE THESIS -->
+  <section class="slide">
+    <div class="act-marker">THE THESIS</div>
+    <div class="slide__label">WHAT CONVERGE IS</div>
+    <h2 class="slide__heading" style="margin-bottom:18px; max-width:1500px;">
+      You don't write the system. You <span class="gradient-text">compile intent</span> into it.
+    </h2>
+    <p class="slide__body" style="margin-bottom:24px; max-width:1540px;">
+      Each pass drops one level of altitude, binds the right engine for that altitude, and ends at a
+      gate that must pass before the next begins. The discipline is the gate. Today the gate is you —
+      you confirm, you approve, you review. The dark factory replaces each human gate with a runnable
+      eval. The passes do not change; only who stands at the gate.
+    </p>
+    <div class="grid-2" style="grid-template-columns: 1fr 1fr 1fr; max-width:1540px;">
+      <div class="fcard"><div class="ic">EVERY PASS</div><h3>Lowers altitude</h3><p>Intent → structure → plan → tasks → code. Each step is closer to something a machine runs.</p></div>
+      <div class="fcard gold"><div class="ic">BINDS</div><h3>An engine</h3><p>The right tool for the altitude — Chat to think, Code to build, Codex to attack, Kimi to crank.</p></div>
+      <div class="fcard green"><div class="ic">ENDS AT</div><h3>A gate</h3><p>Converged means an eval passed — not that you feel done. The gate is the unit of trust.</p></div>
+    </div>
+  </section>
+
+  <!-- S03 — THE SPINE (overview rail) -->
+  <section class="slide">
+    <div class="act-marker">THE SPINE</div>
+    <div class="slide__label">SEVEN PASSES · ONE FORK · ONE GATE</div>
+    <h2 class="slide__heading" style="margin-bottom:10px; max-width:1500px;">
+      The whole method, <span class="gradient-text">on one line.</span>
+    </h2>
+    <p class="slide__body" style="margin-bottom:18px; max-width:1540px; font-size:16px;">
+      Intent → Structure → Decomposition → Consensus → Tasking → Harness → Execution. Each output is
+      the next input. The chain descends from a fuzzy brief to merged code.
+    </p>
+    <div class="pass-rail">
+      <div class="pcol" style="--c: var(--gold);">    <div class="pn">PASS 1</div><div class="pname">Intent</div>       <div class="pengine">Claude CoWork</div><div class="pgate">spec answers brief</div></div>
+      <div class="pcol" style="--c: var(--accent);">  <div class="pn">PASS 2</div><div class="pname">Structure</div>    <div class="pengine">Claude Code · repo</div><div class="pgate">system understood</div></div>
+      <div class="pcol" style="--c: var(--accent);">  <div class="pn">PASS 3</div><div class="pname">Decompose</div>    <div class="pengine">Claude Code · auto</div><div class="pgate">two plans exist</div></div>
+      <div class="pcol" style="--c: var(--purple);">  <div class="pn">PASS 4</div><div class="pname">Consensus</div>    <div class="pengine">Codex adversary</div><div class="pgate">no objection left</div></div>
+      <div class="pcol" style="--c: var(--cyan);">    <div class="pn">PASS 5</div><div class="pname">Tasking</div>      <div class="pengine">task-spec skill</div><div class="pgate">each has an eval</div></div>
+      <div class="pcol" style="--c: var(--accent);">  <div class="pn">PASS 6</div><div class="pname">Harness</div>      <div class="pengine">agents-kbs skill</div><div class="pgate">control layer up</div></div>
+      <div class="pcol" style="--c: var(--green);">   <div class="pn">PASS 7</div><div class="pname">Execute</div>      <div class="pengine">Workflows · Kimi</div><div class="pgate">eval passes = merged</div></div>
+    </div>
+    <div class="step-callout"><div class="so-what">THE INVARIANT</div><div class="so-what-body">Every pass lowers altitude, binds an engine, ends at a gate. <b style="color:var(--text)">You are converged when the eval passes — not when you feel done.</b></div></div>
+  </section>
+
+  <!-- S04 — PASS 1 INTENT -->
+  <section class="slide">
+    <div class="act-marker">PASS 1 OF 7 · ALTITUDE: INTENT</div>
+    <div class="slide__label">INTENT · RECEIVE &amp; COMPREHEND THE BRIEF</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      The client hands you the <span class="gradient-gold">problem.</span> You produce the <span class="gradient-text">spec.</span>
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>Claude CoWork (project)</b></span>
+      <span class="mchip in">IN · <b>brd-analytical-backbone.pdf</b></span>
+      <span class="mchip out">OUT · <b>tech-spec-analytical-engine.pdf</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node gold"><span class="pn-tag">UNDERSTAND</span><span class="pn-name">Read</span><span class="pn-desc">the BRD like a senior engineer — real problem, who hurts, their numbers</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node purple"><span class="pn-tag">INTERROGATE</span><span class="pn-name">Grill</span><span class="pn-desc">the 2-3 questions that most change how we build it</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node green"><span class="pn-tag">CRYSTALLIZE</span><span class="pn-name">Spec</span><span class="pn-desc">the technical answer to their problem — your consulting deliverable</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">GATE</div><div class="gate-b">You can state the client's problem back correctly, and the <b>tech-spec answers it</b>. Born as a PDF — a consensus object you circulate before any code. No premature implementation the brief didn't justify.</div></div>
+  </section>
+
+  <!-- S05 — PASS 2 STRUCTURE -->
+  <section class="slide">
+    <div class="act-marker">PASS 2 OF 7 · ALTITUDE: SYSTEM</div>
+    <div class="slide__label">STRUCTURE · COMPREHEND THE SPEC AGAINST THE REPO</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      Open the <span class="gradient-text">brownfield.</span> Understand a system you didn't write.
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>Claude Code · on the repo</b></span>
+      <span class="mchip in">IN · <b>tech-spec + src/</b></span>
+      <span class="mchip sess">OUT · <b>session understanding (no file)</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node"><span class="pn-tag">COMPREHEND</span><span class="pn-name">Explain</span><span class="pn-desc">the system end to end — the brownfield + what the spec adds</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node purple"><span class="pn-tag">GROUND</span><span class="pn-name">Check</span><span class="pn-desc">does the spec match what's actually in src/ — schema, generator, raw.*?</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node green"><span class="pn-tag">CONFIRM</span><span class="pn-name">Map</span><span class="pn-desc">a clean component + dependency map — what to build, in what order</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">GATE · NO ARTIFACT</div><div class="gate-b">You can explain the full system, consistent with the spec and the real repo. <b>Pass 2 produces no file</b> — its output is the loaded understanding in the session. Keep it open into Pass 3: the understanding is the handoff.</div></div>
+  </section>
+
+  <!-- S06 — PASS 3 DECOMPOSITION -->
+  <section class="slide">
+    <div class="act-marker">PASS 3 OF 7 · ALTITUDE: PLAN</div>
+    <div class="slide__label">DECOMPOSITION · BREAK IT INTO PLANS</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      Two plans, along the <span class="gradient-text">natural seam.</span>
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>Claude Code (Auto) · same session</b></span>
+      <span class="mchip out">OUT · <b>sketch/duckdb-dbt-med-arch.plan</b></span>
+      <span class="mchip out">OUT · <b>sketch/fast-api-mcp.plan</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node"><span class="pn-tag">DECOMPOSE</span><span class="pn-name">Seam</span><span class="pn-desc">split the work — transformation vs serving — and justify the boundary</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node"><span class="pn-tag">PLAN A</span><span class="pn-name">Medallion</span><span class="pn-desc">dbt bronze → silver → gold over raw.*; deps, build order</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node green"><span class="pn-tag">PLAN B</span><span class="pn-name">Serving</span><span class="pn-desc">FastAPI + MCP over the gold tables; the interface it consumes</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">GATE</div><div class="gate-b">Two plans exist along the spec's own seam; each lists features, dependencies, and a sane build order. <b>Plan altitude only</b> — no atomic tasks, no code yet. The session carries from Pass 2 — the understanding becomes the plan without leaving the session.</div></div>
+  </section>
+
+  <!-- S07 — PASS 4 CONSENSUS -->
+  <section class="slide">
+    <div class="act-marker">PASS 4 OF 7 · ALTITUDE: PLAN (HARDENED)</div>
+    <div class="slide__label">CONSENSUS · A DIFFERENT MODEL ATTACKS</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      Bring a <span class="gradient-purple">different engine</span> to refute the plan.
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>Codex (adversary) ↔ Claude (revises)</b></span>
+      <span class="mchip in">IN · <b>both plans + the tech-spec</b></span>
+      <span class="mchip out">OUT · <b>plans sharpened in place</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node purple"><span class="pn-tag">ATTACK</span><span class="pn-name">Refute</span><span class="pn-desc">Codex, as a skeptic who didn't write it — default to refuted</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node cyan"><span class="pn-tag">GROUND</span><span class="pn-name">Drift?</span><span class="pn-desc">check each plan against the tech-spec — contradictions, gaps</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node green"><span class="pn-tag">SHARPEN</span><span class="pn-name">Fix/Own</span><span class="pn-desc">every objection FIXED in a plan or ACCEPTED with an owner</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">GATE · &amp; THE FORK IS DECIDED</div><div class="gate-b">No open objection survives — nothing silently dropped. Cross-model disagreement is the point: Claude won't refute itself hard enough. <b>At the end of Consensus, the fork is decided</b> — does the trust boundary wrap the whole system, or each unit?</div></div>
+  </section>
+
+  <!-- S08 — THE FORK -->
+  <section class="slide">
+    <div class="act-marker">THE FORK · DECIDED AT THE END OF CONSENSUS</div>
+    <div class="slide__label">WHERE DOES THE TRUST BOUNDARY SIT?</div>
+    <h2 class="slide__heading" style="margin-bottom:16px; max-width:1500px;">
+      One coupled system, or <span class="gradient-purple">many independent units?</span>
+    </h2>
+    <div class="versus">
+      <div class="vs-side a">
+        <div class="vs-tag">FORK A · PLAN-DRIVEN</div>
+        <div class="vs-title">One coherent spec</div>
+        <ul>
+          <li>SpecKit / OpenSpec / AgentSpec</li>
+          <li>One tightly-coupled system — pieces only make sense together</li>
+          <li>Trust boundary wraps the whole system</li>
+          <li>Verify: one end-to-end test</li>
+        </ul>
+      </div>
+      <div class="vs-mid">vs</div>
+      <div class="vs-side b">
+        <div class="vs-tag">FORK B · TASK-DRIVEN</div>
+        <div class="vs-title">Many atomic tasks</div>
+        <ul>
+          <li>task-spec + engines</li>
+          <li>Loosely-coupled units — each stands alone (dbt models, MCP tools)</li>
+          <li>Trust boundary wraps each unit</li>
+          <li>Verify: per-unit runnable evals</li>
+        </ul>
+      </div>
+    </div>
+    <div class="step-callout purple"><div class="so-what">BOTH FORKS RECONVERGE ON ONE GATE</div><div class="so-what-body">eval passes = merged. The cut differs; the gate is identical. That shared gate is what makes Converge one method with two paths — and what lets either go dark-factory.</div></div>
+  </section>
+
+  <!-- S09 — PASS 5 TASKING -->
+  <section class="slide">
+    <div class="act-marker">PASS 5 OF 7 · ALTITUDE: ATOMIC UNIT</div>
+    <div class="slide__label">TASKING · CUT THE WORK INTO EVAL-BACKED UNITS</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      Atomic. <span class="gradient-text">Self-contained.</span> Engine-agnostic.
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>task-spec skill</b></span>
+      <span class="mchip in">IN · <b>the two hardened plans</b></span>
+      <span class="mchip out">OUT · <b>tasks/* per plan, each with an eval</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node cyan"><span class="pn-tag">CUT</span><span class="pn-name">Atomize</span><span class="pn-desc">one indivisible unit per task — "build silver_orders", "the MCP query tool"</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node"><span class="pn-tag">DESCRIBE</span><span class="pn-name">Tech, not agent</span><span class="pn-desc">name the work + paths, not the harness agent — that comes next</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node green"><span class="pn-tag">BIND EVAL</span><span class="pn-name">Done = ?</span><span class="pn-desc">a runnable eval defines done — dbt test passes, gold query returns N</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">GATE</div><div class="gate-b">Every task carries a runnable eval — no eval, not a task yet. Task-spec is <b>self-contained</b> (its own architect + scripts) and <b>vendor-portable</b> (Claude, Codex, Kimi, or manual). The spec is engine-agnostic; the eval is engine-universal.</div></div>
+  </section>
+
+  <!-- S10 — PASS 6 HARNESS -->
+  <section class="slide">
+    <div class="act-marker">PASS 6 OF 7 · ALTITUDE: CONTROL LAYER</div>
+    <div class="slide__label">HARNESS · GENERATE THE BUILD-SYSTEM THE TASKS NEED</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      Build the <span class="gradient-text">rails</span> the tasks will ride on.
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>agents-kbs-tech-stack skill</b></span>
+      <span class="mchip in">IN · <b>the tasks (they name what they need)</b></span>
+      <span class="mchip out">OUT · <b>.claude/ — agents · KBs · rules · CLAUDE.md</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node"><span class="pn-tag">READ NEEDS</span><span class="pn-name">Scope</span><span class="pn-desc">the tasks touch dbt + duckdb + mcp — scaffold exactly those</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node purple"><span class="pn-tag">SCAFFOLD</span><span class="pn-name">Agents + KBs</span><span class="pn-desc">paired architect + developer per tech, grounded in real docs</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node green"><span class="pn-tag">EMIT</span><span class="pn-name">Cross-tool</span><span class="pn-desc">AGENTS.md · Cursor · Copilot — every engine inherits one contract</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">GATE · ORDER NOTE</div><div class="gate-b">The control layer stands; agents are grounded. <b>Tasking before Harness on purpose</b> — the tasks are the requirements; the harness is fitted to exactly what they need, not built speculatively. The harness is the one artifact that outlives the project.</div></div>
+  </section>
+
+  <!-- S11 — PASS 7 EXECUTION -->
+  <section class="slide">
+    <div class="act-marker">PASS 7 OF 7 · ALTITUDE: CODE</div>
+    <div class="slide__label">EXECUTION · BUILD UNTIL THE EVALS GO GREEN</div>
+    <h2 class="slide__heading" style="margin-bottom:14px; max-width:1500px;">
+      The loop closes when the <span class="gradient-green">eval passes.</span>
+    </h2>
+    <div class="pass-meta">
+      <span class="mchip engine">ENGINE · <b>Workflows · AgentSpec · Kimi Crank</b></span>
+      <span class="mchip in">IN · <b>tasks + grounded harness</b></span>
+      <span class="mchip out">OUT · <b>merged code (dbt + MCP on raw.*)</b></span>
+    </div>
+    <div class="phase-flow">
+      <div class="phase-flow__node green"><span class="pn-tag">DISPATCH</span><span class="pn-name">Right engine</span><span class="pn-desc">Kimi cranks the mechanical models · Claude judges · Codex reviews</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node"><span class="pn-tag">RUN EVAL</span><span class="pn-name">Green?</span><span class="pn-desc">each task's eval runs — dbt test, gold query, the MCP responds</span></div>
+      <div class="phase-flow__arrow">&rarr;</div>
+      <div class="phase-flow__node gold"><span class="pn-tag">LOOP / MERGE</span><span class="pn-name">Until green</span><span class="pn-desc">re-run until the eval passes — then merge</span></div>
+    </div>
+    <div class="gate-panel"><div class="gate-h">THE GATE THAT CLOSES THE LOOP</div><div class="gate-b"><b>eval passes = merged.</b> Each engine in its role; each task looped until its eval is green. Automate this gate and the human steps out — that is the dark factory.</div></div>
+  </section>
+
+  <!-- S12 — THE INVARIANT / close -->
+  <section class="slide slide--quote">
+    <div class="act-marker" style="margin: 0 auto 24px;">CONVERGE · THE INVARIANT</div>
+    <p class="hero-quote">
+      Every pass lowers altitude, binds an engine, ends at a gate. You are converged when the eval
+      passes — <span style="color:var(--green)">not when you feel done.</span>
+    </p>
+    <div class="hero-cite">Remove yourself one gate at a time · what's left is the dark factory</div>
+  </section>
+
+</div>
+<div class="deck-counter">CONVERGE · SPINE</div>
+<script>
+  const counter = document.querySelector('.deck-counter');
+  const slides = document.querySelectorAll('.slide');
+  const deck = document.querySelector('.deck');
+  function update() {
+    const i = Math.round(deck.scrollTop / window.innerHeight);
+    counter.textContent = `${String(i+1).padStart(2,'0')} / ${String(slides.length).padStart(2,'0')}`;
+  }
+  deck.addEventListener('scroll', update); update();
+  window.__captureReady = true;
+</script>
+</body>
+</html>

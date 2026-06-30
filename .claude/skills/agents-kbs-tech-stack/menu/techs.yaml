@@ -521,3 +521,118 @@ supabase:
   memorable_maxim: "RLS is the API. Auth is the identity. Realtime is the bonus."
   architect_mission: "Design Supabase projects where RLS makes the backend redundant."
   developer_mission: "Ship features whose security lives in the database, not in the client."
+
+# ─── AI-Native DataOps cluster (Sentinel Engine stack) ─────────────────────
+# Added for ws-3-crew-ai-multi-agent. Grounded in:
+#   crewai  → /websites/crewai_en (docs.crewai.com)
+#   dagster → /websites/dagster_io (docs.dagster.io)
+#   duckdb  → /websites/duckdb_current (duckdb.org/docs)
+#   mcp     → /websites/modelcontextprotocol_io (modelcontextprotocol.io)
+
+crewai:
+  display_name: CrewAI
+  description: "CrewAI multi-agent orchestration — hierarchical Process, manager_llm, memory, knowledge/RAG, guardrails + output_pydantic, human_input, Flows, tool retry"
+  primary_language: python
+  recommended_mcps: ["mcp__context7__*", "mcp__ref__*", "mcp__exa__*"]
+  default_threshold_architect: 0.90
+  default_threshold_developer: 0.95
+  agent_color_architect: orange
+  agent_color_developer: blue
+  kb_seed:
+    concepts: [crew-agent-task-model, hierarchical-process, memory-and-knowledge]
+    patterns: [guardrails-output-pydantic, human-in-the-loop, flows-conditional-routing]
+    reference: [agent-task-crew-api, capability-unlock-map]
+  architect_capabilities:
+    - "Designing crew topology — hierarchical Process with manager_llm vs sequential"
+    - "Mapping each failure mode to the CrewAI capability it forces (Memory / RAG / HITL / guardrails / retry / Flows)"
+    - "Deciding where human_input gates a destructive remediation"
+    - "Choosing model tiers per agent (stronger manager, cheaper specialists) against a cost budget"
+  developer_capabilities:
+    - "Writing Agent/Task/Crew definitions with typed expected_output and output_pydantic"
+    - "Implementing task guardrail functions that validate before accepting output"
+    - "Wiring memory + knowledge sources so a repeat incident isn't cold-started"
+    - "Building Flows with conditional routing that fan each failure type to the right squad"
+  memorable_maxim: "Agents have roles. Tasks have contracts. The manager delegates. Guardrails decide what counts as done."
+  architect_mission: "Design crews whose every agent earns its tokens and whose every failure mode has an owner."
+  developer_mission: "Ship agents whose output is typed, validated, and scored against ground truth — not vibes."
+
+dagster:
+  display_name: Dagster
+  description: "Dagster — software-defined assets, incremental/partitioned ingestion, asset checks, sensors, structured run logs the Log Analyst reads"
+  primary_language: python
+  recommended_mcps: ["mcp__context7__*", "mcp__ref__*"]
+  default_threshold_architect: 0.95
+  default_threshold_developer: 0.90
+  agent_color_architect: orange
+  agent_color_developer: blue
+  kb_seed:
+    concepts: [asset-mental-model, partitions-and-incremental, asset-checks-vs-dbt-tests]
+    patterns: [postgres-to-duckdb-asset, incremental-extraction, sensor-and-run-status]
+    reference: [asset-decorator-api, run-log-and-metadata]
+  architect_capabilities:
+    - "Designing the asset graph (one asset per source table) and its lineage"
+    - "Choosing partitioning + incremental strategy for Postgres → DuckDB extraction"
+    - "Deciding asset checks vs dbt tests for each data-quality guarantee"
+    - "Planning the run-status surface + sensors that trigger the Sentinel"
+  developer_capabilities:
+    - "Writing @asset / @asset_check functions with typed context and metadata"
+    - "Implementing incremental extraction that survives schema drift in the source"
+    - "Emitting structured run logs the Log Analyst can parse for the failing node"
+    - "Configuring sensors / run-status hooks that fire on materialization failure"
+  memorable_maxim: "Assets are the unit. Lineage is free. The run log is the Sentinel's evidence."
+  architect_mission: "Design an asset graph whose failures are legible in the run log without a debugger."
+  developer_mission: "Ship assets that extract incrementally, check their own quality, and log loudly when they break."
+
+duckdb:
+  display_name: DuckDB
+  description: "DuckDB — in-process analytical engine, columnar/vectorized queries, Parquet, postgres scanner, MotherDuck cloud path; the Profiler queries this"
+  primary_language: sql
+  recommended_mcps: ["mcp__context7__*", "mcp__ref__*"]
+  default_threshold_architect: 0.90
+  default_threshold_developer: 0.95
+  agent_color_architect: green
+  agent_color_developer: green
+  kb_seed:
+    concepts: [columnar-vectorized-model, embedded-vs-warehouse, motherduck-cloud-path]
+    patterns: [postgres-scan-ingest, gold-obt-query, anomaly-profiling-queries]
+    reference: [sql-dialect-notes, performance-and-explain]
+  architect_capabilities:
+    - "Deciding what materializes in DuckDB vs stays in Postgres (the detection-seam call, U3)"
+    - "Designing gold One-Big-Tables for sub-5s p95 query latency (AC-2)"
+    - "Planning the MotherDuck migration path (file → connection string, no SQL rewrites)"
+    - "Choosing where the Profiler's anomaly checks run — silver vs gold"
+  developer_capabilities:
+    - "Writing analytical SQL that exploits columnar/vectorized execution"
+    - "Ingesting from Postgres via the scanner and round-tripping Parquet"
+    - "Writing the Profiler's anomaly-detection queries (nulls, ranges, dupes, drift)"
+    - "Reading EXPLAIN/ANALYZE to keep gold queries inside the latency budget"
+  memorable_maxim: "Columns are fast. Embedded is simple. What reaches gold is what the Profiler can see."
+  architect_mission: "Design a warehouse where the answer is one OBT away and the cloud path is a connection string."
+  developer_mission: "Ship queries that hit the latency budget and surface exactly the anomalies the source injected."
+
+mcp:
+  display_name: Model Context Protocol
+  description: "MCP — exposing analytics as typed tools (get_schema_info / execute_analytical_query / generate_report) over stdio/HTTP for Claude Desktop and other LLM hosts"
+  primary_language: python
+  recommended_mcps: ["mcp__context7__*", "mcp__ref__*"]
+  default_threshold_architect: 0.90
+  default_threshold_developer: 0.95
+  agent_color_architect: purple
+  agent_color_developer: blue
+  kb_seed:
+    concepts: [mcp-protocol-model, tools-vs-resources, transport-stdio-http]
+    patterns: [tool-schema-design, analytical-tool-server, nl-to-sql-tool]
+    reference: [server-sdk-api, tool-json-schema]
+  architect_capabilities:
+    - "Designing the three analytical tools' contracts (schema / query / report)"
+    - "Choosing tools vs resources for each capability the warehouse exposes"
+    - "Deciding transport (stdio vs HTTP) and the security boundary around DuckDB"
+    - "Planning how natural-language intent maps to deterministic, parameterized SQL"
+  developer_capabilities:
+    - "Implementing an MCP server (FastMCP / SDK) exposing typed tools over gold tables"
+    - "Writing JSON-Schema tool definitions whose shapes the LLM can call reliably"
+    - "Translating NL intent → validated DuckDB SQL → deterministic result set"
+    - "Testing the server against an MCP client / inspector before wiring Claude Desktop"
+  memorable_maxim: "Tools are the API. Schemas are the contract. The LLM is just the caller."
+  architect_mission: "Design MCP tools whose schemas make the warehouse self-describing to any LLM host."
+  developer_mission: "Ship tools that turn natural language into deterministic SQL and never leak the raw connection."

@@ -1,3 +1,25 @@
+"""The 14-failure chaos registry -- the source of truth for what can break.
+
+Each failure is a :class:`Failure` subclass declaring four metadata strings
+(``key``, ``summary``, ``detected_by``, ``unlocks``) and an ``inject(conn)``
+method that mutates source Postgres and returns an :class:`InjectionResult`.
+
+The registry splits two ways:
+
+* **Base-crew failures** (``unlocks`` starts with ``"base crew"``) -- the
+  detect / diagnose / report core the four-capability crew handles directly.
+* **Feature-unlocking failures** -- each forces one specific CrewAI capability
+  (Memory, Knowledge/RAG, Human-in-the-loop, Guardrails, tool reliability,
+  Flows). The ``unlocks`` strings here are the de-facto failure -> capability
+  map that rule R6 binds the crew to; until the KB reference is populated,
+  these fields are the authoritative version of that map.
+
+Chaos is not self-reversing. Several injectors ``DROP CONSTRAINT`` or mutate
+existing rows with no restore path (only ``reset-schema`` reverts the
+``schema_drift`` column rename). A reproducible inject -> detect -> score run
+must rebuild a clean baseline first (rule R7).
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -10,6 +32,7 @@ from src.gen import repository as repo
 
 
 def _order_columns(conn: psycopg.Connection) -> list[str]:
+    """Build the insert column list for ``orders``, drift-aware in slot 0."""
     return [
         repo.order_customer_column(conn),
         "product_id",
@@ -23,22 +46,49 @@ def _order_columns(conn: psycopg.Connection) -> list[str]:
 
 @dataclass(frozen=True, slots=True)
 class InjectionResult:
+    """What an injection did, as the engine records it to the ledger.
+
+    ``failure`` is the registry key, ``detail`` is a human-readable note (e.g.
+    the affected ``order_id``), and ``detected_by`` names the crew role
+    expected to surface it. The engine passes these three fields straight to
+    :func:`repository.record_incident`.
+    """
+
     failure: str
     detail: str
     detected_by: str
 
 
 class Failure:
+    """Base class for the 14 injectable failures.
+
+    Subclasses set the four metadata class attributes and override
+    :meth:`inject`. ``key`` is the registry/CLI name; ``summary`` is the
+    one-line CLI description; ``detected_by`` is the responsible crew role;
+    ``unlocks`` documents which CrewAI capability the failure forces (R6).
+    """
+
     key: str = ""
     summary: str = ""
     detected_by: str = ""
     unlocks: str = ""
 
     def inject(self, conn: psycopg.Connection) -> InjectionResult:
+        """Mutate the source DB and return what was done. Must not commit.
+
+        Committing is the engine's job; the injector only stages the change so
+        the failure and its ledger row land in one transaction.
+        """
         raise NotImplementedError
 
 
 def _disable_order_checks(conn: psycopg.Connection) -> None:
+    """Drop the ``orders`` CHECK/NOT-NULL guards so bad rows can land.
+
+    DESTRUCTIVE and not self-reversing: the dropped constraints are not
+    restored by the generator, so a clean baseline requires a full schema
+    rebuild (``make reset`` + ``make seed``), not ``reset-schema`` (R7).
+    """
     customer_column = repo.order_customer_column(conn)
     repo.execute(conn, "ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_unit_price_check")
     repo.execute(conn, "ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_quantity_check")
@@ -47,6 +97,8 @@ def _disable_order_checks(conn: psycopg.Connection) -> None:
 
 
 class NegativePrice(Failure):
+    """Insert an order priced below zero. Drops the price CHECK first."""
+
     key = "negative_price"
     summary = "Insert an order with a negative unit price and total."
     detected_by = "Data Profiler"
@@ -66,6 +118,8 @@ class NegativePrice(Failure):
 
 
 class MissingCustomer(Failure):
+    """Insert an orphan order with a NULL customer ref. Drops NOT NULL first."""
+
     key = "missing_customer"
     summary = "Insert an order with a NULL customer_id (orphaned order)."
     detected_by = "Data Profiler"
@@ -85,6 +139,8 @@ class MissingCustomer(Failure):
 
 
 class InvalidQuantity(Failure):
+    """Insert an order with quantity ``-5``. Drops the quantity CHECK first."""
+
     key = "invalid_quantity"
     summary = "Insert an order with a non-positive quantity."
     detected_by = "Data Profiler"
@@ -103,6 +159,8 @@ class InvalidQuantity(Failure):
 
 
 class DuplicateOrder(Failure):
+    """Clone the latest order row verbatim. No-op if the table is empty."""
+
     key = "duplicate_order"
     summary = "Re-insert the most recent order as an exact duplicate row."
     detected_by = "Data Profiler"
@@ -122,6 +180,8 @@ class DuplicateOrder(Failure):
 
 
 class LateArrival(Failure):
+    """Insert a valid order backdated 45 days to test freshness windows."""
+
     key = "late_arrival"
     summary = "Insert an order backdated 45 days (late-arriving data)."
     detected_by = "Data Profiler"
@@ -140,6 +200,8 @@ class LateArrival(Failure):
 
 
 class VolumeSpike(Failure):
+    """Insert ``burst`` valid orders in one ``executemany`` (default 500)."""
+
     key = "volume_spike"
     summary = "Insert a sudden burst of orders (volume anomaly)."
     detected_by = "Data Profiler"
@@ -168,6 +230,13 @@ class VolumeSpike(Failure):
 
 
 class SchemaDrift(Failure):
+    """Rename ``orders.customer_id`` to ``user_id``. Idempotent if already drifted.
+
+    This is the one failure ``reset-schema`` can revert. Because the rename is
+    live, every other query resolves the column via
+    :func:`repository.order_customer_column`.
+    """
+
     key = "schema_drift"
     summary = "Rename orders.customer_id -> user_id (breaks downstream models)."
     detected_by = "Log Analyst"
@@ -182,6 +251,12 @@ class SchemaDrift(Failure):
 
 
 class OrphanPayment(Failure):
+    """Insert a payment for a non-existent order. Drops the payments FK first.
+
+    The dropped foreign key is not restored (R7): a clean baseline needs a
+    full schema rebuild.
+    """
+
     key = "orphan_payment"
     summary = "Insert a payment referencing a non-existent order_id."
     detected_by = "Data Profiler"
@@ -198,6 +273,13 @@ class OrphanPayment(Failure):
 
 
 class RecurringIncident(Failure):
+    """Re-inject a negative-price order and report its occurrence number.
+
+    Counts prior ledger rows for this key so each injection's ``detail`` reads
+    ``occurrence #N`` -- the signal a memory-equipped crew uses to recognise a
+    repeat offender. Drops the price CHECK first.
+    """
+
     key = "recurring_incident"
     summary = "Re-inject negative prices repeatedly so the same incident appears many times."
     detected_by = "Data Profiler"
@@ -219,6 +301,13 @@ class RecurringIncident(Failure):
 
 
 class AmbiguousAnomaly(Failure):
+    """Drop revenue two ways at once so the root cause is genuinely ambiguous.
+
+    DESTRUCTIVE in place: cancels 200 existing orders and halves the price of
+    20 random products. Both could explain a revenue dip; neither row is
+    restored, so a clean baseline needs a reseed (R7).
+    """
+
     key = "ambiguous_anomaly"
     summary = "Revenue drops via cancellations AND a price cut at once (two plausible root causes)."
     detected_by = "Data Profiler"
@@ -239,6 +328,13 @@ class AmbiguousAnomaly(Failure):
 
 
 class DestructiveFix(Failure):
+    """Zero ``total_amount`` on 300 existing orders so the fix must be bulk.
+
+    DESTRUCTIVE in place and not restored (R7): the only remediation is a bulk
+    overwrite, which is what the human-in-the-loop approval gate is meant to
+    guard.
+    """
+
     key = "destructive_fix"
     summary = "Corrupt total_amount on many rows so the only fix is a bulk overwrite."
     detected_by = "Data Profiler"
@@ -254,6 +350,13 @@ class DestructiveFix(Failure):
 
 
 class MalformedData(Failure):
+    """Overwrite ``status`` on 25 existing orders with control-char garbage.
+
+    DESTRUCTIVE in place and not restored (R7). The unprintable payload is the
+    noise a guardrail-validated, ``output_pydantic`` post-mortem must reject or
+    normalise.
+    """
+
     key = "malformed_data"
     summary = "Inject garbage into status fields (free-text noise the agent must summarise)."
     detected_by = "Data Profiler"
@@ -271,6 +374,13 @@ class MalformedData(Failure):
 
 
 class SlowSource(Failure):
+    """Stall the source with ``pg_sleep`` to simulate an unresponsive DB.
+
+    Sets ``lock_timeout = 1s`` then sleeps ``seconds`` (default 8). Leaves no
+    row mutation behind -- it only makes a tool slow, exercising retry and
+    timeout handling.
+    """
+
     key = "slow_source"
     summary = "Hold a lock on orders to make the source slow/unresponsive for a while."
     detected_by = "Log Analyst"
@@ -287,6 +397,16 @@ class SlowSource(Failure):
 
 
 class MultiFailureCascade(Failure):
+    """Fire three sub-failures at once, recording each one individually.
+
+    Composes ``missing_customer`` + ``volume_spike`` + ``schema_drift`` and
+    calls :func:`repository.record_incident` for each sub-result here. The
+    engine then records the cascade itself, so **one cascade injection writes
+    four** ``injected_incidents`` rows (three sub-incidents + the cascade). Any
+    I4 scoring consumer must account for that fan-out when matching diagnoses
+    to ground truth.
+    """
+
     key = "multi_failure_cascade"
     summary = "Fire schema drift + nulls + a volume spike together (mixed incident)."
     detected_by = "Manager"
@@ -323,6 +443,7 @@ REGISTRY: dict[str, Failure] = {
 
 
 def get(key: str) -> Failure:
+    """Look up a failure by key, raising ``KeyError`` (listing valid keys)."""
     if key not in REGISTRY:
         available = ", ".join(sorted(REGISTRY))
         raise KeyError(f"unknown failure '{key}'. available: {available}")

@@ -10,8 +10,19 @@ dependencies = [
     # Component A platform stack (C2 ingest -> C3 dbt -> C4 DuckDB -> C5 MCP)
     "dagster>=1.9",
     "dagster-webserver>=1.9",
+    # dagster-dbt uses the 0.x library scheme: 0.29.x tracks dagster core 1.13.x.
+    # Pinned to the matching minor so the @dbt_assets / DagsterDbtTranslator API
+    # stays compatible with the installed dagster 1.13.10 line.
+    "dagster-dbt>=0.29,<0.30",
     "dbt-duckdb>=1.9",
     "duckdb>=1.1",
+    # PyArrow backs C2's bulk raw upsert: stamped rows are assembled into an
+    # in-memory Arrow table, registered as a virtual relation, and written with a
+    # single vectorized INSERT...SELECT...ON CONFLICT. The DuckDB docs explicitly
+    # warn against executemany for bulk loads; Arrow is the endorsed companion.
+    # Already present transitively (duckdb/dbt) — pinned here so the import is a
+    # declared contract, not an accident.
+    "pyarrow>=14",
     "fastapi>=0.115",
     "uvicorn>=0.30",
     "mcp>=1.12",

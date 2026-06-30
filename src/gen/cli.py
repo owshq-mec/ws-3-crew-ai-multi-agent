@@ -1,3 +1,10 @@
+"""``argparse`` front-end for the chaos generator (``python -m src.gen.cli``).
+
+Subcommands ``list`` / ``traffic`` / ``inject`` / ``reset-schema`` / ``watch``
+back the Makefile targets ``failures`` / ``traffic`` / ``inject`` / others. Each
+handler returns a process exit code.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -41,6 +48,12 @@ def _inject(args: argparse.Namespace) -> int:
 
 
 def _reset_schema(_: argparse.Namespace) -> int:
+    """Revert ONLY the ``schema_drift`` column rename (user_id -> customer_id).
+
+    This is the sole self-reversing remediation in the layer. It does NOT
+    restore constraints dropped by other injectors or undo row mutations, so a
+    true clean baseline still requires a full rebuild + reseed (R7).
+    """
     with repo.session() as conn:
         column = repo.order_customer_column(conn)
         if column == "user_id":
@@ -69,6 +82,7 @@ def _watch(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """Build the ``gen`` argument parser with all five subcommands wired up."""
     parser = argparse.ArgumentParser(prog="gen", description="E-commerce traffic and failure generator.")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -95,6 +109,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Parse ``argv`` and dispatch to the chosen subcommand handler."""
     args = build_parser().parse_args(argv)
     return args.func(args)
 

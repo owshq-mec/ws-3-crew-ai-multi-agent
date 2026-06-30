@@ -5,4 +5,16 @@ __pycache__/
 .ruff_cache/
 *.duckdb
 *.duckdb.wal
+*.duckdb.tmp/
+# C4 warehouse: the single shared DuckDB file (DUCKDB_DATABASE default location)
+platform/warehouse/warehouse.duckdb
+platform/warehouse/warehouse.duckdb.wal
 .DS_Store
+
+# Dagster instance (run/event storage)
+.dagster_home/
+
+# dbt build artifacts (generated)
+platform/transform/target/
+platform/transform/logs/
+platform/transform/dbt_packages/

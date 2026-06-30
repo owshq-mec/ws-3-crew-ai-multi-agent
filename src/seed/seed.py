@@ -1,3 +1,11 @@
+"""Seeder CLI: load a deterministic clean baseline into source Postgres.
+
+``python -m src.seed.seed`` (or ``make seed`` / ``make reseed``). The same
+``--seed`` always produces the same rows. Inserts in FK order
+(customers -> products -> orders -> payments), threading each table's returned
+IDs into the next so all references resolve.
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -11,6 +19,7 @@ from .factories import EcommerceFactory, Order
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    """Parse seeder CLI flags (--customers/--products/--orders/--seed/--truncate)."""
     parser = argparse.ArgumentParser(
         prog="seed",
         description="Generate clean, correlated e-commerce data into the source PostgreSQL database.",
@@ -24,6 +33,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def run(customers: int, products: int, orders: int, seed: int, truncate: bool) -> dict[str, int]:
+    """Seed the baseline in one transaction; return per-table row counts.
+
+    Seeds Faker for reproducibility, optionally truncates the business tables
+    first (``injected_incidents`` is preserved by :func:`truncate_all`, R7),
+    then inserts customers -> products -> orders -> payments, threading
+    returned PKs into the next table's FKs. Each order is anchored to its
+    customer's ``created_at`` so the temporal invariants hold. Commits before
+    returning the counts.
+    """
     faker = Faker()
     Faker.seed(seed)
     factory = EcommerceFactory(faker)
@@ -84,6 +102,7 @@ def run(customers: int, products: int, orders: int, seed: int, truncate: bool) -
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI entrypoint: run the seed and print an aligned per-table count table."""
     args = parse_args(argv)
     totals = run(args.customers, args.products, args.orders, args.seed, args.truncate)
     width = max(len(t) for t in totals)

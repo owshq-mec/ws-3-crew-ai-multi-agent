@@ -1,3 +1,23 @@
+"""Frozen domain records and the factory that builds a correlated baseline.
+
+The factory exists to produce a *clean*, referentially-plausible dataset so
+that defects later injected by the chaos generator are unambiguous. The
+invariants it upholds:
+
+* money is always :class:`~decimal.Decimal` (2 dp, ``ROUND_HALF_UP``) via
+  :func:`_money` -- never float in the database;
+* ``cost`` is 45-80% of ``unit_price``, both inside the product category's
+  price band (see ``CATEGORIES``);
+* timestamps are causally ordered -- ``customer.created_at`` <=
+  ``order.ordered_at`` <= ``payment.paid_at`` -- because each event is sampled
+  after the prior one;
+* a ``returned`` order forces ``payment.status = 'refunded'``;
+* ``email`` and ``sku`` are unique (``faker.unique``).
+
+The records are ``frozen``/``slots`` dataclasses so a built baseline cannot be
+mutated in place.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -24,6 +44,11 @@ PAYMENT_STATUSES = ("authorized", "captured", "refunded", "failed")
 
 
 def _money(value: float) -> Decimal:
+    """Quantise a float to a 2-dp ``Decimal`` (``ROUND_HALF_UP``).
+
+    Converts via ``str(value)`` first to avoid binary-float artifacts, so money
+    is exact before it reaches the database.
+    """
     return Decimal(str(value)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
@@ -68,10 +93,17 @@ class Payment:
 
 
 class EcommerceFactory:
+    """Builds correlated ``Customer``/``Product``/``Order``/``Payment`` records.
+
+    Determinism is the caller's responsibility: seed the shared ``Faker`` (via
+    ``Faker.seed``) before building so the same seed yields the same rows.
+    """
+
     def __init__(self, faker: Faker) -> None:
         self.faker = faker
 
     def customer(self) -> Customer:
+        """Build one customer with a unique email and a 1-3y-old signup date."""
         name = self.faker.name()
         handle = name.lower().replace(" ", ".").replace("'", "")
         return Customer(
@@ -84,6 +116,7 @@ class EcommerceFactory:
         )
 
     def product(self) -> Product:
+        """Build one product priced inside its category band, cost 45-80% of it."""
         category = self.faker.random_element(list(CATEGORIES))
         low, high = CATEGORIES[category]
         unit_price = _money(self.faker.pyfloat(min_value=low, max_value=high, right_digits=2))
@@ -100,6 +133,12 @@ class EcommerceFactory:
         )
 
     def order(self, customer_id: int, product: tuple[int, Decimal], not_before: datetime) -> Order:
+        """Build one order; ``ordered_at`` is sampled at or after ``not_before``.
+
+        Pass the customer's ``created_at`` as ``not_before`` to keep the
+        signup <= order temporal invariant. ``total_amount`` is
+        ``unit_price * quantity`` rounded as money.
+        """
         product_id, unit_price = product
         quantity = self.faker.random_int(1, 6)
         total = _money(float(unit_price) * quantity)
@@ -115,6 +154,11 @@ class EcommerceFactory:
         )
 
     def payment(self, order_id: int, order: Order) -> Payment:
+        """Build the matching payment; a returned order forces ``refunded``.
+
+        ``paid_at`` is sampled at or after ``order.ordered_at`` and the amount
+        mirrors the order total, preserving the order <= payment invariant.
+        """
         status = "refunded" if order.status == "returned" else self.faker.random_element(PAYMENT_STATUSES)
         paid_at = self.faker.date_time_between(start_date=order.ordered_at, end_date="now", tzinfo=UTC)
         return Payment(
